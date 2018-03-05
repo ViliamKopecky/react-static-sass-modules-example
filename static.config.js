@@ -3,6 +3,7 @@ import path from 'path'
 
 // Paths Aliases defined through tsconfig.json
 const typescriptWebpackPaths = require('./webpack.config.js')
+const ExtractTextPlugin = require('extract-text-webpack-plugin')
 
 export default {
   entry: path.join(__dirname, 'src', 'index.tsx'),
@@ -42,16 +43,11 @@ export default {
       },
     ]
   },
-  webpack: (config, { defaultLoaders }) => {
-    // Add .ts and .tsx extension to resolver
-    config.resolve.extensions.push('.ts', '.tsx')
+  webpack: (config, { defaultLoaders, stage }) => {
+    config.resolve.extensions.push('.ts', '.tsx', '.sass', '.scss')
 
-    // Add TypeScript Path Mappings (from tsconfig via webpack.config.js)
-    // to react-statics alias resolution
     config.resolve.alias = typescriptWebpackPaths.resolve.alias
 
-    // We replace the existing JS rule with one, that allows us to use
-    // both TypeScript and JavaScript interchangeably
     config.module.rules = [
       {
         oneOf: [
@@ -70,7 +66,96 @@ export default {
               },
             ],
           },
+          {
+            test: /\.module\.s(a|c)ss$/,
+            use:
+              stage === 'dev'
+                ? [
+                    {
+                      loader: 'style-loader',
+                    },
+                    {
+                      loader: 'typings-for-css-modules-loader',
+                      options: {
+                        modules: true,
+                        localIdentName: '[name]__[local]--[hash:base64:5]',
+                        sourceMap: true,
+                        namedExport: true,
+                        camelCase: true,
+                        minimize: false,
+                        importLoaders: 2,
+                      },
+                    },
+                    'postcss-loader',
+                    {
+                      loader: 'sass-loader',
+                      options: { includePaths: ['src/'] },
+                    },
+                  ]
+                : ExtractTextPlugin.extract({
+                    use: [
+                      {
+                        loader: 'typings-for-css-modules-loader',
+                        options: {
+                          importLoaders: 2,
+                          minimize: true,
+                          sourceMap: process.env.REACT_STATIC_DEBUG,
+                          modules: true,
+                          localIdentName: process.env.REACT_STATIC_DEBUG
+                            ? '[name]__[local]--[hash:base64:5]'
+                            : undefined,
+                        },
+                      },
+                      'postcss-loader',
+                      {
+                        loader: 'sass-loader',
+                        options: { includePaths: ['src/'] },
+                      },
+                    ],
+                  }),
+          },
+          {
+            test: /\.s(a|c)ss$/,
+            exclude: /\.module\.s(a|c)ss$/,
+            use:
+              stage === 'dev'
+                ? [
+                    {
+                      loader: 'style-loader',
+                    },
+                    {
+                      loader: 'css-loader',
+                      options: {
+                        sourceMap: true,
+                        minimize: false,
+                      },
+                    },
+                    'postcss-loader',
+                    { loader: 'sass-loader' },
+                  ]
+                : ExtractTextPlugin.extract({
+                    use: [
+                      {
+                        loader: 'css-loader',
+                        options: {
+                          importLoaders: 2,
+                          minimize: true,
+                          sourceMap: process.env.REACT_STATIC_DEBUG,
+                          localIdentName: process.env.REACT_STATIC_DEBUG
+                            ? '[name]__[local]--[hash:base64:5]'
+                            : undefined,
+                        },
+                      },
+                      'postcss-loader',
+                      {
+                        loader: 'sass-loader',
+                        options: { includePaths: ['src/'] },
+                      },
+                    ],
+                  }),
+          },
           defaultLoaders.cssLoader,
+          defaultLoaders.jsLoader,
           defaultLoaders.fileLoader,
         ],
       },
